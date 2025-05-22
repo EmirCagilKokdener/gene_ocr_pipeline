@@ -1,0 +1,19 @@
+# Core deep-learning
+torch
+torchvision
+
+# Image I/O & processing
+numpy
+opencv-python
+Pillow
+
+# OCR
+easyocr
+
+# Graph construction & visualization
+networkx
+matplotlib
+
+# Utilities
+tqdm
+requests
