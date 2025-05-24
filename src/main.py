@@ -5,8 +5,8 @@ from pathlib import Path
 # Determine the project root directory
 BASE_DIR    = Path(__file__).resolve().parent.parent
 DATA_DIR    = BASE_DIR / "data"
-IMG_DIR     = DATA_DIR / "images"
-XML_DIR     = DATA_DIR / "xml"
+IMG_DIR     = DATA_DIR / "images" / "test"
+XML_DIR     = DATA_DIR / "xml" / "test"
 RESULTS_DIR = BASE_DIR / "data" / "results" / "pipeline"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 

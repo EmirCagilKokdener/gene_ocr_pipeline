@@ -5,7 +5,7 @@ from pathlib import Path
 
 def evaluate(pathway_id: str):
     BASE_DIR = Path(__file__).resolve().parent.parent
-    xml_path = BASE_DIR / "data/xml" / f"{pathway_id}.xml"
+    xml_path = BASE_DIR / "data/xml/test" / f"{pathway_id}.xml"
     pipeline_path = BASE_DIR / "data/results/pipeline" / f"{pathway_id}_pipeline.json"
 
     # 1) ground-truth gene entry IDs from KGML

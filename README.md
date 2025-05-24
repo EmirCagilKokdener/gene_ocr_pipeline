@@ -1,7 +1,7 @@
 
 # 🧬 Gene OCR Pipeline
 
-A fully automated image-to-network pipeline for extracting gene labels from KEGG pathway diagrams, matching them to KGML entries, and constructing/visualizing the gene interaction graph. Includes segmentation model training and standalone inference.
+A fully automated image-to-network pipeline for extracting gene labels from KEGG pathway diagrams, matching them to KGML entries, and constructing/visualizing the gene interaction graph. Includes segmentation model training, standalone inference, and end-to-end pipeline.
 
 ---
 
@@ -11,12 +11,12 @@ A fully automated image-to-network pipeline for extracting gene labels from KEGG
 2. [Description](#description)  
 3. [Requirements](#requirements)  
 4. [Installation](#installation)  
-5. [Data Preparation](#data-preparation)  
+5. [Data Preparation & Split](#data-preparation--split)  
 6. [Usage](#usage)  
-7. [Pipeline Steps](#pipeline-steps)  
    - [Segmentation & Inference](#segmentation--inference)  
-   - [Full Pipeline](#full-pipeline)  
+   - [Full Pipeline (EasyOCR only)](#full-pipeline-easyocr-only)  
    - [Training the Segmentation Model](#training-the-segmentation-model)  
+7. [Pipeline Steps](#pipeline-steps)  
 8. [Results & Outputs](#results--outputs)  
 9. [Extending the Pipeline](#extending-the-pipeline)  
 10. [License](#license)  
@@ -28,9 +28,13 @@ A fully automated image-to-network pipeline for extracting gene labels from KEGG
 ```
 .
 ├── data/
-│   ├── images/                # Pathway PNGs
-│   ├── xml/                   # KGML XML files
-│   ├── masks/genes/           # Ground-truth masks
+│   ├── images/
+│   │   ├── train/                   # 10 pathways for training UNet
+│   │   └── test/                    # 2 held-out pathways for evaluation
+│   ├── xml/
+│   │   ├── train/                   # KGML XML for training
+│   │   └── test/                    # KGML XML for testing
+│   ├── masks/genes/                # Auto-generated ground-truth masks
 │   └── results/
 │       ├── inference/
 │       │   ├── masks/genes/
@@ -41,19 +45,19 @@ A fully automated image-to-network pipeline for extracting gene labels from KEGG
 │           ├── {pathway}_pipeline.json
 │           └── {pathway}_graph.png
 ├── models/
-│   └── best_gen_box_unet.pth  # Pretrained UNet model
+│   └── best_gen_box_unet.pth       # Trained UNet model
 ├── src/
-│   ├── download_kegg.py
+│   ├── download_kegg.py            # Downloads and splits KEGG pathways
 │   ├── generate_gene_masks_from_xml.py
-│   ├── segment_genes.py
-│   ├── ocr_genes.py
-│   ├── match_with_kgml.py
-│   ├── graph_constructor.py
-│   ├── visualize_graph.py
-│   └── main.py
+│   ├── segment_genes.py            # UNet segmentation
+│   ├── ocr_genes.py                # EasyOCR
+│   ├── match_with_kgml.py          # Fuzzy match OCR to KGML
+│   ├── graph_constructor.py        # Graph construction
+│   ├── visualize_graph.py          # Graph drawing
+│   └── main.py                     # End-to-end pipeline
 ├── train/
-│   └── train_gen_box_unet.py  # UNet training script
-├── inference.py               # Standalone segmentation & box extraction
+│   └── train_gen_box_unet.py       # UNet training script
+├── inference.py                    # Standalone segmentation + box extraction
 └── requirements.txt
 ```
 
@@ -61,16 +65,16 @@ A fully automated image-to-network pipeline for extracting gene labels from KEGG
 
 ## 🧠 Description
 
-This repository provides:
+This repository supports three workflows:
 
-- **Segmentation & Inference**  
-  Detects gene-label boxes in pathway images using a UNet model, and saves masks, bounding boxes, and overlay images.
+1. **Segmentation & Inference**  
+   Apply a pretrained UNet to detect gene-label boxes in pathway images, outputting masks, bounding boxes, and overlayed visuals.
 
-- **Full Pipeline**  
-  Segmentation → OCR → KGML matching → Graph construction → Visualization.
+2. **Full Pipeline (EasyOCR only)**  
+   Segmentation → OCR (EasyOCR) → KGML matching → Graph construction → Visualization.
 
-- **Training**  
-  Full training code for UNet using XML-derived ground-truth masks.
+3. **Training**  
+   Train a UNet segmentation model on XML-derived ground-truth masks.
 
 ---
 
@@ -83,9 +87,8 @@ This repository provides:
 - EasyOCR  
 - NetworkX  
 - matplotlib  
-- pytesseract *(optional)*
 
-Install all dependencies:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -95,8 +98,6 @@ pip install -r requirements.txt
 
 ## ⚙️ Installation
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/YourUserName/gene_ocr_pipeline.git
 cd gene_ocr_pipeline
@@ -105,23 +106,25 @@ pip install -r requirements.txt
 
 ---
 
-## 🧪 Data Preparation
+## 🗂️ Data Preparation & Split
 
-Download KEGG data:
+Download KEGG pathways (10 train + 2 test):
 
 ```bash
 python src/download_kegg.py
 ```
 
-This will populate `data/images/` and `data/xml/`.
+- Populates:  
+  `data/images/train/`, `data/xml/train/`  
+  `data/images/test/`, `data/xml/test/`
 
-Optionally, generate ground-truth masks:
+Generate ground-truth masks for training:
 
 ```bash
 python src/generate_gene_masks_from_xml.py
 ```
 
-Masks will be saved to `data/masks/genes/`.
+Outputs to: `data/masks/genes/`
 
 ---
 
@@ -129,7 +132,7 @@ Masks will be saved to `data/masks/genes/`.
 
 ### 🧭 Segmentation & Inference
 
-Run inference on all pathway images:
+Run inference on all test images:
 
 ```bash
 python inference.py
@@ -138,76 +141,79 @@ python inference.py
 - Masks → `data/results/inference/masks/genes/`  
 - Boxes (JSON) → `data/results/inference/boxes/genes/`  
 - Overlays → `data/results/inference/overlay/`  
-- All boxes (combined) → `data/results/inference/all_gene_boxes.json`
+- Combined boxes → `data/results/inference/all_gene_boxes.json`
 
 ---
 
-### 🔄 Full Pipeline
+### 🔄 Full Pipeline (EasyOCR only)
 
-Run the complete pipeline for a single pathway:
+Run the full pipeline on a test pathway:
 
 ```bash
-python src/main.py --pathway hsa04110
+python src/main.py --pathway hsaXXXXXX
 ```
 
----
-
-## 🔍 Pipeline Steps
-
-### Segmentation & Inference
-
-- `segment_genes.py`:  
-  Loads the UNet model → resizes image → thresholds prediction → finds contours → outputs bounding boxes.
-
-- `inference.py`:  
-  Wraps segmentation + saves masks, boxes, overlays.
-
----
-
-### Full Pipeline
-
-1. **Segmentation** → `segment_genes`
-2. **OCR** → `extract_gene_names` (via EasyOCR)
-3. **KGML Matching** → `match_with_kgml`  
-   Uses fuzzy string match to `graphics@name` entries.
-4. **Save JSON**  
-   Includes `gene_boxes`, `gene_names`, `index_by_entry`.
-5. **Graph Construction** → `graph_constructor`
-6. **Visualization** → `visualize_graph`  
-   Saves high-resolution PNG.
+- Outputs:
+  - JSON: `data/results/pipeline/{pathway}_pipeline.json`
+  - Graph PNG: `data/results/pipeline/{pathway}_graph.png`
 
 ---
 
 ### 🏋️ Training the Segmentation Model
 
-Train the UNet using your ground-truth masks:
+Train on the train split:
 
 ```bash
 python train/train_gen_box_unet.py
 ```
 
-- Input: `data/images/`, `data/masks/genes/`
-- Output:
-  - Model → `models/best_gen_box_unet.pth`
-  - Logs → `data/results/training/metrics.csv`
+- Inputs:  
+  `data/images/train/`  
+  `data/masks/genes/`
+
+- Outputs:  
+  - Model → `models/best_gen_box_unet.pth`  
+  - Metrics → `data/results/training/metrics.csv`  
   - Plots → `training_metrics.png`
+
+---
+
+## 🔍 Pipeline Steps
+
+1. **Segmentation**:  
+   Resizes image → runs UNet → thresholds → finds contours → bounding boxes.
+
+2. **OCR (EasyOCR)**:  
+   Crops + pads box → upscales → runs OCR → extracts top candidate.
+
+3. **KGML Matching**:  
+   Builds synonym→entry_id map → fuzzy match OCR to `graphics@name`.
+
+4. **Serialization**:  
+   Saves: `gene_boxes`, `gene_names`, `index_by_entry`.
+
+5. **Graph Construction**:  
+   Parses `<relation>` tags → builds NetworkX DiGraph.
+
+6. **Visualization**:  
+   Spring layout → draw nodes/edges/labels → save PNG.
 
 ---
 
 ## 📊 Results & Outputs
 
-| Task         | Output Location                              |
-|--------------|-----------------------------------------------|
-| Inference    | `data/results/inference/`                     |
-| Pipeline     | `data/results/pipeline/{pathway}_*.json/png`  |
-| Training     | `data/results/training/` & `models/`          |
+| Workflow   | Output Location                            |
+|------------|---------------------------------------------|
+| Inference  | `data/results/inference/`                   |
+| Pipeline   | `data/results/pipeline/{pathway}_*.json/png`|
+| Training   | `data/results/training/`, `models/`         |
 
-Example JSON:
+Example pipeline JSON:
 ```json
 {
-  "gene_boxes": [[x, y, w, h], ...],
-  "gene_names": ["TP53", "CDK1", ...],
-  "index_by_entry": { "52": 0, "4": 1 }
+  "gene_boxes": [[x, y, w, h], …],
+  "gene_names": ["TP53", "CDK1", …],
+  "index_by_entry": { "52": 0, "4": 1, … }
 }
 ```
 
@@ -215,9 +221,9 @@ Example JSON:
 
 ## 🧩 Extending the Pipeline
 
-- Add new OCR engines → edit `src/ocr_genes.py`
-- Retrain model → modify `train/train_gen_box_unet.py`
-- Batch mode → iterate over all files in `data/images/`
+- Add new OCR models → `src/ocr_genes.py`
+- Modify training code → `train/train_gen_box_unet.py`
+- Batch evaluation → loop over `data/images/test/`
 
 ---
 

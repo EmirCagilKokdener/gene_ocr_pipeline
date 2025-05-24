@@ -2,11 +2,9 @@
 """
 generate_gene_masks_from_xml.py
 
-Parses KGML (XML) files to generate binary masks for gene entries
-based on their graphic coordinates. Outputs one mask per pathway
-under data/masks/genes/.
+From data/xml/{train,test}/… XMLs, generate binary masks
+under data/masks/genes/{train,test}/… matching the same IDs.
 """
-
 import logging
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -15,78 +13,56 @@ import cv2
 import numpy as np
 from PIL import Image
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# Project directories
-BASE_DIR = Path(__file__).resolve().parent.parent
-IMG_DIR  = BASE_DIR / "data" / "images"
-XML_DIR  = BASE_DIR / "data" / "xml"
-MASK_DIR = BASE_DIR / "data" / "masks" / "genes"
-MASK_DIR.mkdir(parents=True, exist_ok=True)
+BASE = Path(__file__).resolve().parent.parent / "data"
+SETS = ["train", "test"]
 
-def generate_gene_masks_from_kgml():
-    """
-    Iterate over all KGML XML files and create a binary mask highlighting
-    gene rectangles. Masks are saved to data/masks/genes/{pathway_id}_mask.png.
-    """
-    for xml_file in XML_DIR.glob("*.xml"):
-        pathway_id = xml_file.stem
-        img_file = IMG_DIR / f"{pathway_id}.png"
+for subset in SETS:
+    xml_dir  = BASE / "xml"   / subset
+    img_dir  = BASE / "images"/ subset
+    mask_dir = BASE / "masks" / "genes"   / subset
+    mask_dir.mkdir(parents=True, exist_ok=True)
 
+    for xml_file in xml_dir.glob("*.xml"):
+        pid = xml_file.stem
+        img_file = img_dir / f"{pid}.png"
         if not img_file.exists():
-            logging.warning(f"Image not found for {pathway_id}: {img_file}")
+            logging.warning(f"[{subset}] Missing image for {pid}")
             continue
 
-        # Load the original image to get its dimensions
-        image = Image.open(img_file)
-        width, height = image.size
+        # get dimensions
+        img = Image.open(img_file)
+        w, h = img.size
+        mask = np.zeros((h, w), dtype=np.uint8)
 
-        # Initialize an empty mask
-        mask = np.zeros((height, width), dtype=np.uint8)
-
-        # Parse the KGML
+        # parse KGML
         tree = ET.parse(xml_file)
         root = tree.getroot()
-
-        # Find all <entry> elements, accounting for possible namespaces
         entries = root.findall(".//entry") or root.findall(".//{*}entry")
 
-        for entry in entries:
-            if entry.get("type") != "gene":
+        for e in entries:
+            if e.get("type") != "gene":
                 continue
-
-            # Find the graphics element (namespace-agnostic)
-            graphics = entry.find("graphics") or entry.find("{*}graphics")
-            if graphics is None:
+            g = e.find("graphics") or e.find("{*}graphics")
+            if g is None:
                 continue
-
-            # Read and convert coordinates
             try:
-                x = float(graphics.get("x"))
-                y = float(graphics.get("y"))
-                w = float(graphics.get("width"))
-                h = float(graphics.get("height"))
-            except (TypeError, ValueError):
+                x, y = float(g.get("x")), float(g.get("y"))
+                ww, hh = float(g.get("width")), float(g.get("height"))
+            except:
                 continue
 
-            # Convert center+size to top-left/bottom-right
-            x1 = max(0, int(x - w / 2))
-            y1 = max(0, int(y - h / 2))
-            x2 = min(width,  int(x + w / 2))
-            y2 = min(height, int(y + h / 2))
+            # convert center→corners
+            x1 = max(0, int(x - ww/2))
+            y1 = max(0, int(y - hh/2))
+            x2 = min(w,  int(x + ww/2))
+            y2 = min(h,  int(y + hh/2))
+            cv2.rectangle(mask, (x1,y1), (x2,y2), 255, -1)
 
-            # Fill the rectangle on the mask
-            cv2.rectangle(mask, (x1, y1), (x2, y2), color=255, thickness=-1)
-
-        # Save the mask
-        out_path = MASK_DIR / f"{pathway_id}_mask.png"
+        out_path = mask_dir / f"{pid}_mask.png"
         cv2.imwrite(str(out_path), mask)
-        logging.info(f"Saved gene mask for {pathway_id} → {out_path}")
-
-if __name__ == "__main__":
-    generate_gene_masks_from_kgml()
+        logging.info(f"[{subset}] Saved mask → {out_path}")
