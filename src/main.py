@@ -1,3 +1,4 @@
+# src/main.py
 import json
 import argparse
 from pathlib import Path
@@ -17,24 +18,13 @@ from match_with_kgml    import match_ocr_to_kgml
 from graph_constructor  import build_graph_from_kgml
 from visualize_graph    import visualize_graph
 
+# Optional: import evaluate function
+from evaluate import evaluate
 
-def process_pathway(pathway_id: str):
+def process_pathway(pathway_id: str, run_eval=False):
     """
     Execute the complete KEGG pathway processing pipeline for a single pathway.
-
-    Parameters
-    ----------
-    pathway_id : str
-        KEGG pathway identifier (e.g., 'hsa04110').
-
-    Pipeline steps
-    --------------
-    1) Segment gene regions within the pathway image.
-    2) Extract gene names from each region using EasyOCR.
-    3) Match OCR results to KGML entries.
-    4) Persist intermediate results to JSON.
-    5) Construct a directed graph from KGML relations.
-    6) Render and save the graph visualization.
+    Optionally runs evaluation if 'run_eval' is True.
     """
     print(f"\n=== Processing pathway: {pathway_id} (OCR engine: EasyOCR only) ===")
 
@@ -78,6 +68,10 @@ def process_pathway(pathway_id: str):
     visualize_graph(G, save_path=str(graph_image))
     print(f"Graph visualization saved to: {graph_image}")
 
+    # Step 7 (optional): Evaluate
+    if run_eval:
+        print("\n--- Evaluation ---")
+        evaluate(pathway_id)
 
 def main():
     """
@@ -91,10 +85,14 @@ def main():
         required=True,
         help="Target KEGG pathway ID (e.g., 'hsa04110')"
     )
+    parser.add_argument(
+        "--eval",
+        action="store_true",
+        help="If set, runs evaluation after pipeline execution"
+    )
     args = parser.parse_args()
 
-    process_pathway(args.pathway)
-
+    process_pathway(args.pathway, run_eval=args.eval)
 
 if __name__ == "__main__":
     main()
