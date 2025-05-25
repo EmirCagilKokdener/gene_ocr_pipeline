@@ -9,6 +9,7 @@ Pillow
 
 # OCR
 easyocr
+pytesseract
 
 # Graph construction & visualization
 networkx
