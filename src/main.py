@@ -21,7 +21,7 @@ from visualize_graph    import visualize_graph
 # Optional: import evaluate function
 from evaluate import evaluate
 
-def process_pathway(pathway_id: str, run_eval=False):
+def process_pathway(pathway_id: str, ocr_method: str = "easyocr", run_eval=False):
     """
     Execute the complete KEGG pathway processing pipeline for a single pathway.
     Optionally runs evaluation if 'run_eval' is True.
@@ -42,7 +42,7 @@ def process_pathway(pathway_id: str, run_eval=False):
     gene_boxes = segment_genes(str(img_path))
 
     # Step 2: OCR via EasyOCR
-    gene_names = extract_gene_names(str(img_path), gene_boxes)
+    gene_names = extract_gene_names(str(img_path), gene_boxes, method=ocr_method)
 
     # Step 3: Match to KGML
     kgml_result    = match_ocr_to_kgml(gene_names, str(xml_path))
@@ -90,9 +90,16 @@ def main():
         action="store_true",
         help="If set, runs evaluation after pipeline execution"
     )
+    parser.add_argument(
+        "--ocr",
+        choices=["easyocr", "tesseract"],
+        default="easyocr",
+        help="OCR engine to use: 'easyocr' or 'tesseract' (default: easyocr)"
+    )
+
     args = parser.parse_args()
 
-    process_pathway(args.pathway, run_eval=args.eval)
+    process_pathway(args.pathway, ocr_method=args.ocr, run_eval=args.eval)
 
 if __name__ == "__main__":
     main()

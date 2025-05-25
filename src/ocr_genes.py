@@ -1,37 +1,21 @@
 import cv2
 import numpy as np
+import pytesseract
 import easyocr
 from typing import List, Tuple
 
-# OCR configuration
-OCR_SCALE = 2      # Upscaling factor to enhance character legibility
-MIN_AREA  = 200    # Minimum allowable area for a bounding box to undergo OCR
+OCR_SCALE = 2
+MIN_AREA = 200
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# Initialize the EasyOCR reader
+_TESSERACT_CONFIG = "--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 _EASYOCR_READER = easyocr.Reader(['en'], gpu=False)
 
 def extract_gene_names(
     image_path: str,
-    box_coordinates: List[Tuple[int, int, int, int]]
+    box_coordinates: List[Tuple[int, int, int, int]],
+    method: str = "easyocr"
 ) -> List[str]:
-    """
-    Recognize gene labels within specified bounding boxes using EasyOCR.
-
-    For each box:
-      1. Skip if the box area is below MIN_AREA.
-      2. Apply a small padding to capture full characters.
-      3. Upscale the crop by OCR_SCALE for improved text resolution.
-      4. Convert from BGR to RGB as required by EasyOCR.
-      5. Return only the first recognized text, or "" if none.
-
-    Args:
-        image_path (str): Path to the input image.
-        box_coordinates (List[Tuple[int,int,int,int]]):
-            List of (x, y, width, height) bounding boxes.
-
-    Returns:
-        List[str]: The top OCR result for each box, or "" if nothing recognized.
-    """
     img = cv2.imread(image_path)
     if img is None:
         raise FileNotFoundError(f"Cannot open image at: {image_path}")
@@ -44,7 +28,6 @@ def extract_gene_names(
             results.append("")
             continue
 
-        # Apply padding and clamp to image bounds
         pad = 5
         x1, y1 = max(0, x - pad), max(0, y - pad)
         x2 = min(img.shape[1], x + w + pad)
@@ -56,7 +39,6 @@ def extract_gene_names(
             results.append("")
             continue
 
-        # Upscale for better OCR accuracy
         h2, w2 = roi.shape[:2]
         roi = cv2.resize(
             roi,
@@ -64,15 +46,25 @@ def extract_gene_names(
             interpolation=cv2.INTER_LINEAR
         )
 
-        # Convert to RGB and run EasyOCR
         roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
-        try:
-            texts = _EASYOCR_READER.readtext(roi_rgb, detail=0)
-        except Exception as ex:
-            print(f"OCR Box {idx}: EasyOCR error: {ex}")
-            texts = []
 
-        print(f"OCR Box {idx}: {texts}")
-        results.append(texts[0] if texts else "")
+        try:
+            if method.lower() == "tesseract":
+                text = pytesseract.image_to_string(
+                    roi_rgb,
+                    config=_TESSERACT_CONFIG
+                ).strip()
+                print(f"OCR Box {idx} (Tesseract): [{text}]")
+            elif method.lower() == "easyocr":
+                texts = _EASYOCR_READER.readtext(roi_rgb, detail=0)
+                text = texts[0] if texts else ""
+                print(f"OCR Box {idx} (EasyOCR): [{text}]")
+            else:
+                raise ValueError("Unsupported OCR method: choose 'tesseract' or 'easyocr'")
+        except Exception as ex:
+            print(f"OCR Box {idx}: OCR error: {ex}")
+            text = ""
+
+        results.append(text or "")
 
     return results
